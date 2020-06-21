@@ -1,0 +1,13 @@
+[Unit]
+# Human readable name of the unit
+Description=Comfoair 350 service
+After=network.target
+
+[Service]
+Restart=always
+Type=simple
+WorkingDirectory=/home/pi/pycomfoair
+ExecStart=/home/pi/.local/bin/pipenv run python3 /home/pi/hasscomfoair -s /dev/ttyUSB0 -m 192.168.1.89
+
+[Install]
+WantedBy=default.target
