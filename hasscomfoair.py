@@ -27,6 +27,7 @@ import logging
 from datetime import datetime
 import sys 
 import os
+import json
 from comfoair.asyncio import ComfoAir
 from asyncio_mqtt import Client, MqttError
 
@@ -199,6 +200,78 @@ class ComfoAirHandler():
             if not speed or speed == "off":
                 await ca.set_speed(2)
 
+async def send_ha_config(mqtt):
+    device = {
+        "identifiers": [
+        "ComfoAir350"
+        ],
+        "name": "ComfoAir 350",
+        "manufacturer": "Zehnder"
+    }
+    fan = {
+            "name": "ComfoAir Fan",
+            "device": device,
+            "unique_id": "ComfoAir350_fan",
+            "state_topic": TOPIC_SET_FAN_STATE,
+            "command_topic": TOPIC_SET_FAN_STATE,
+            "speed_state_topic": TOPIC_FAN_SPEED,
+            "speed_command_topic": TOPIC_SET_FAN_SPEED,
+            "availability_topic": TOPIC_AVAILABILITY,
+            "payload_available": "Online",
+            "payload_not_available": "Offline",
+            "qos": 0,
+            "payload_on": "on",
+            "payload_off": "off",
+            "payload_low_speed": "low",
+            "payload_medium_speed": "medium",
+            "payload_high_speed": "high",
+            "speeds": ["off", "low", "medium", "high"],
+            "platform": "mqtt"
+            }
+
+    temp_outside_sensor = {
+        "platform": "mqtt",
+        "name": "Outside Temperature",
+        "icon": "mdi:thermometer",
+        "device": device,
+        "unique_id": "ComfoAir350_outside_temp",
+        "state_topic": TOPIC_TEMP_OUTSIDE,
+        "availability_topic": TOPIC_AVAILABILITY,
+        "payload_available": "Online",
+        "payload_not_available": "Offline",
+        "unit_of_measurement": "C"
+    }
+    airflow_supply = {
+        "platform": "mqtt",
+        "name": "Supply Airflow",
+        "icon": "mdi:fan",
+        "device": device,
+        "unique_id": "ComfoAir350_airflow_supply",
+        "state_topic": TOPIC_AIRFLOW_SUPPLY,
+        "availability_topic": TOPIC_AVAILABILITY,
+        "payload_available": "Online",
+        "payload_not_available": "Offline",
+        "unit_of_measurement": "%"
+    }
+    airflow_exhaust = {
+        "platform": "mqtt",
+        "name": "Exhaust Airflow",
+        "icon": "mdi:fan",
+        "device": device,
+        "unique_id": "ComfoAir350_airflow_exhaust",
+        "state_topic": TOPIC_AIRFLOW_EXHAUST,
+        "availability_topic": TOPIC_AVAILABILITY,
+        "payload_available": "Online",
+        "payload_not_available": "Offline",
+        "unit_of_measurement": "%"
+    }
+
+    await mqtt.publish("homeassistant/fan/ComfoAir/config", json.dumps(fan))
+    await mqtt.publish("homeassistant/sensor/ComfoAir_temp/config", json.dumps(temp_outside_sensor))
+    await mqtt.publish("homeassistant/sensor/ComfoAir_airflow_supply/config", json.dumps(airflow_supply))
+    await mqtt.publish("homeassistant/sensor/ComfoAir_airflow_exhaust/config", json.dumps(airflow_exhaust))
+
+
 def add_ca_listeners(ca, h):
     ca.add_listener(h.event)
     ca.add_cooked_listener(ca.AIRFLOW_EXHAUST, h.airflow_exhaust)
@@ -225,7 +298,6 @@ async def handle_mqtt_message(mqtt, ca, handlers :dict):
     async with mqtt.unfiltered_messages() as messages:
         for topic in handlers.keys():
             await mqtt.subscribe(topic)
-            logger.info(f'Subsccribed to channel {topic}')
         async for message in messages:
             value = message.payload.decode()
             topic = message.topic
@@ -248,6 +320,7 @@ async def mqtt_connection(ca, url, username, password):
             # set the LWT message in case of disconnect
             mqtt._client.will_set(TOPIC_AVAILABILITY, payload="Offline", qos=0, retain=True)
             await mqtt.connect()
+            await send_ha_config(mqtt)
             await mqtt.publish(TOPIC_AVAILABILITY, "Online", qos=0, retain=True)
             add_ca_listeners(ca, h)
             logger.info('Connected to MQTT')
